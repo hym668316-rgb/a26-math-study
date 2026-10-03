@@ -517,3 +517,28 @@ table.tbl tr:hover td{background:var(--surface-2)}
   .topbar{flex-wrap:wrap;gap:10px}
   .hud{width:100%;justify-content:flex-end}
 }
+
+/* ---------------------------------------------------------------------------
+   手机窄屏（≤560px）—— 用户要在手机上「随时随地」打开，必须单独处理。
+   实测：390×844 视口下文档宽 458px，横向溢出 68px，唯一来源是顶部 4 个标签页
+   （.tabs 是 flex:1 + 4 个 nowrap 按钮，需要约 430px）。公式块不受影响：
+   math[display="block"] 自带 overflow-x:auto，只在自身内部滚动，不撑宽页面。
+   修法：让 .tabs 换到独立一行并在行内横向滚动，而不是压缩按钮字距。
+   --------------------------------------------------------------------------- */
+@media (max-width:560px){
+  .topbar{padding:8px 12px;gap:8px}
+  .tabs{
+    order:9;flex:0 0 100%;width:100%;min-width:0;
+    overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
+    scrollbar-width:none;padding-bottom:2px;
+  }
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{padding:7px 11px;font-size:13px;flex:0 0 auto;white-space:nowrap}
+  .hud{width:100%;justify-content:space-between;gap:10px}
+  .hud-item{font-size:11.5px}
+  .hud-item b{font-size:15px}
+  .view{padding:14px 12px 64px}
+  .sidebar{padding:12px 10px 24px}
+  /* 宽表格同样内部滚动，不要撑宽整页 */
+  table.tbl{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
