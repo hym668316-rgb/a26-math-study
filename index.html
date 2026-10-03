@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>高等工程数学A26 · 递进学习系统</title>
+<link rel="stylesheet" href="assets/style.css">
+<!-- 公式方案：构建期用 latex2mathml 预渲染为 MathML（见 assets/build_mathml.py）。
+     不加载任何数学运行时 —— 无 2.1 MB 依赖、无异步竞态、无 NaN 尺寸、天然 HTML 安全。
+     需要现代浏览器（Chrome 109+ / Edge 109+ / Firefox / Safari 14.1+ 均原生支持 MathML）。 -->
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">高</span>
+    <div>
+      <div class="t1">高等工程数学A26</div>
+      <div class="t2">矩阵论 · 数值计算 递进学习系统</div>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-view="learn">📚 递进学习</button>
+    <button class="tab" data-view="practice">✍️ 习题系统</button>
+    <button class="tab" data-view="qa">💬 互动问答</button>
+    <button class="tab" data-view="mastery">📊 掌握度</button>
+  </nav>
+  <div class="hud">
+    <div class="hud-item"><b id="hud-done">0</b><span>/ <i id="hud-total">0</i> 已掌握</span></div>
+    <div class="hud-item"><b id="hud-time">0</b><span>分钟学习</span></div>
+    <button class="ghost" id="btn-reset" title="清空本地学习记录">重置</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="side-title">学习路径</div>
+      <div class="side-sub">按递进层级排列 · 带 ★ 的是考点重点</div>
+    </div>
+    <div class="path" id="path"></div>
+    <div class="legend">
+      <div class="lg"><i class="dot core"></i>核心 ★★★　必考，例题最全</div>
+      <div class="lg"><i class="dot key"></i>重点 ★★☆　常考</div>
+      <div class="lg"><i class="dot basic"></i>了解 ★☆☆　知道即可</div>
+    </div>
+  </aside>
+
+  <main id="view" class="view"></main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="assets/echarts.min.js"></script>
+<script src="assets/kp-mathml.js"></script>
+<script src="assets/data-a.js"></script>
+<script src="assets/data-b.js"></script>
+<script src="assets/data-c.js"></script>
+<script src="assets/data-d.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
