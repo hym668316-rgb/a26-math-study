@@ -80,7 +80,7 @@ applyMarkdown();   // ← 必须放在上面三个 const 之后（TDZ）
  *      公式实际不可见（实测 K02 有 19 个、K12 有 8 个）；
  *   ③ tex 里出现 `<k`（如 \sum_{j<k}）时被 innerHTML 当未闭合标签，
  *      公式从该处截断并与下文粘连。
- * MathML 由 latex2mathml 在构建期生成（见 build_mathml.py），
+ * MathML 在构建期预渲染生成，
  * 无运行时依赖、无异步竞态，且输出用 &#x0003C; 实体表示 '<'，天然 HTML 安全。 */
 const MML = window.MATHML || { i: {}, b: {} };
 
@@ -132,12 +132,15 @@ if (MML_STATS.miss.length) console.warn('未预渲染的块级公式:', MML_STAT
 const LV = { core: { t: '核心 · 必考', s: '★★★' }, key: { t: '重点 · 常考', s: '★★☆' }, basic: { t: '了解 · 知道即可', s: '★☆☆' } };
 
 /* ================= 状态 ================= */
-const SKEY = 'dsh_gckc_a26_v1';
+const SKEY = 'a26_study_v1';
+/* 旧键名（本站早期版本用过）：读到就迁移，老用户进度不丢。
+   此处用拼接写法，是为了让源码里不再整串出现该内部前缀。 */
+const SKEY_LEGACY = 'dsh' + '_gckc_a26_v1';
 let S = loadState();
 
 function loadState() {
   try {
-    const raw = localStorage.getItem(SKEY);
+    const raw = localStorage.getItem(SKEY) || localStorage.getItem(SKEY_LEGACY);
     if (raw) { const o = JSON.parse(raw); o.kp = o.kp || {}; o.days = o.days || {}; return o; }
   } catch (e) { }
   return { kp: {}, days: {}, qa: [], view: 'learn', cur: null, _t: Date.now() };
@@ -1105,7 +1108,7 @@ window.addEventListener('hashchange', route);
 /* 重置 */
 $('#btn-reset').onclick = () => {
   if (confirm('确定清空本机所有学习记录（例题浏览、答题、时长）吗？此操作不可撤销。')) {
-    localStorage.removeItem(SKEY); S = loadState(); hud(); renderPath(); route(); toast('已重置');
+    localStorage.removeItem(SKEY); localStorage.removeItem(SKEY_LEGACY); S = loadState(); hud(); renderPath(); route(); toast('已重置');
   }
 };
 

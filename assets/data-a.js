@@ -19,7 +19,7 @@
 window.COURSE = {
   title: "高等工程数学A26",
   subtitle: "矩阵论 · 数值计算 递进学习系统",
-  teacher: "路康亚（理学院）",
+  teacher: "本课程主讲教师",
   school: "北京信息科技大学",
   source: "本页知识点与例题全部来自该课程 4 份课件 PDF（共 215 页），重要度定级来自 5 份公开教学大纲与 11 份真实试卷。",
   modules: [
