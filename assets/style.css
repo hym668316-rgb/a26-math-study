@@ -542,3 +542,88 @@ table.tbl tr:hover td{background:var(--surface-2)}
   /* 宽表格同样内部滚动，不要撑宽整页 */
   table.tbl{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
 }
+
+/* ===========================================================================
+   自检区 —— 点「学习完毕」(✓) 后，讲解收成一块空白；点空白才出题。
+   仅在 .cpt.read 状态下出现，未标记掌握时完全不影响原有讲解样式。
+   =========================================================================== */
+.sczone{padding:2px 0 4px}
+
+/* 空白块：要一眼看出"这里是可以点的"，但又不能喧宾夺主 */
+.sc-blank{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  min-height:112px;padding:20px 18px;cursor:pointer;text-align:center;
+  border:1.5px dashed var(--orange-line);border-radius:12px;
+  background:repeating-linear-gradient(135deg,var(--surface-2) 0 10px,#fff 10px 20px);
+  transition:.16s;
+}
+.sc-blank:hover{border-color:var(--orange);background:repeating-linear-gradient(135deg,#FFF6EC 0 10px,#fff 10px 20px)}
+.sc-blank:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+.sc-ico{
+  width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  font-weight:800;font-size:17px;color:#fff;background:var(--orange-gfx);
+}
+.sc-t{font-size:13.6px;font-weight:700;color:var(--ink)}
+.sc-s{font-size:12.4px;color:var(--ink-3)}
+
+/* 题目面板 */
+.sc-panel{display:flex;flex-direction:column;gap:12px}
+.sc-note{
+  font-size:12.6px;color:var(--ink-2);background:var(--surface-2);
+  border-left:3px solid var(--orange-line);border-radius:0 8px 8px 0;padding:8px 11px;
+}
+.sc-q{border:1px solid var(--line);border-radius:11px;padding:12px 13px;background:#fff;transition:.16s}
+.sc-q.ok{border-color:#9CCFA6;background:#F5FBF6}
+.sc-q.no{border-color:#E7B4AE;background:#FEF7F6}
+.sc-stem{display:flex;gap:8px;font-size:13.8px;line-height:1.62;color:var(--ink);margin-bottom:9px}
+.sc-stem b{
+  flex:0 0 auto;font-size:11.5px;font-weight:800;color:#fff;background:var(--orange-gfx);
+  border-radius:6px;padding:1px 7px;height:fit-content;margin-top:2px;
+}
+.sc-opts{display:flex;flex-direction:column;gap:6px}
+.sc-opt{
+  display:flex;gap:9px;align-items:flex-start;width:100%;text-align:left;cursor:pointer;
+  border:1px solid var(--line);background:#fff;border-radius:9px;
+  padding:8px 11px;font-size:13.2px;line-height:1.6;color:var(--ink);transition:.14s;
+  font-family:inherit;
+}
+.sc-opt:hover:not(:disabled){border-color:var(--orange);background:#FFFBF6}
+.sc-opt:disabled{cursor:default}
+.sc-opt i{
+  flex:0 0 auto;font-style:normal;font-weight:800;font-size:11.5px;color:var(--ink-3);
+  border:1px solid var(--line);border-radius:5px;padding:0 5px;margin-top:1px;
+}
+.sc-opt.right{border-color:#7FB98C;background:#EDF8F0}
+.sc-opt.right i{color:#fff;background:#4E9A61;border-color:#4E9A61}
+.sc-opt.wrong{border-color:#D89B93;background:#FDF1EF}
+.sc-opt.wrong i{color:#fff;background:#C0605A;border-color:#C0605A}
+.sc-fb{margin-top:9px;padding-top:9px;border-top:1px dashed var(--line-2)}
+.sc-verdict{font-size:12.8px;font-weight:800;margin-bottom:4px}
+.sc-verdict.ok{color:#3E7F4E}
+.sc-verdict.no{color:#B04A44}
+.sc-why{font-size:12.4px;line-height:1.7;color:var(--ink-2)}
+.sc-sum{
+  font-size:12.6px;color:var(--ink-3);text-align:center;padding:6px 0 2px;
+  border-top:1px dashed var(--line-2);margin-top:2px;
+}
+.sc-sum.all{color:#3E7F4E;font-weight:700}
+.sc-sum.part{color:#9A6304;font-weight:700}
+
+/* 无选择题时的兜底：逐条回忆清单 */
+.sc-recall{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+.sc-recall li{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
+.sc-recall li.on{border-color:var(--orange-line);background:#FFFBF6}
+.sc-rh{
+  display:block;padding:9px 12px;cursor:pointer;font-size:13px;font-weight:600;color:var(--primary);
+  user-select:none;
+}
+.sc-rh::before{content:'▸ ';color:var(--ink-3)}
+.sc-recall li.on .sc-rh::before{content:'▾ '}
+.sc-rb{padding:0 12px 11px;font-size:13.2px;line-height:1.75;color:var(--ink)}
+
+@media (max-width:560px){
+  .sc-blank{min-height:96px;padding:16px 12px}
+  .sc-q{padding:10px 10px}
+  .sc-stem{font-size:13.2px}
+  .sc-opt{font-size:12.8px;padding:7px 9px}
+}

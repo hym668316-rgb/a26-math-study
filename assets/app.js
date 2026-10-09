@@ -163,22 +163,27 @@ function addTime(sec) {
 function masteryOf(kp) {
   const st = S.kp[kp.id] || { examples: [], quiz: {}, seconds: 0, conceptRead: [] };
   const nEx = (kp.examples || []).length || 1;
-  const nQ = (kp.quiz || []).length || 1;
   const nCp = (kp.concept || []).length || 1;
   const exSeen = Math.min((st.examples || []).length, nEx);
-  const answered = Object.keys(st.quiz || {}).length;
   const cpRead = Math.min((st.conceptRead || []).length, nCp);
+  // 答题正确率 = 课后习题 + 概念自检。自检题只有**答过的**才进分母，
+  // 这样"标记掌握后做了自检"比"只打个勾"多一份证据，但不会因为没做而扣分。
+  const corrQuiz = Object.values(st.quiz || {}).filter(Boolean).length;
+  const scKeys = Object.keys(st.selfcheck || {});
+  const corrSc = scKeys.filter(k => st.selfcheck[k]).length;
+  const nQ = (kp.quiz || []).length + scKeys.length;
+  const answered = Object.keys(st.quiz || {}).length + scKeys.length;
+  const qR = nQ ? (corrQuiz + corrSc) / nQ : 0;
   if (exSeen === 0 && answered === 0 && cpRead === 0 && !(st.seconds > 20))
     return { m: 0, lv: 'zero', exSeen, nEx, answered, nQ, cpRead, nCp, secs: st.seconds || 0 };
   const cpR = cpRead / nCp;
   const exR = exSeen / nEx;
-  const corr = Object.values(st.quiz || {}).filter(Boolean).length;
-  const qR = corr / nQ;
   const tR = Math.min((st.seconds || 0) / (nEx * 45 + 120), 1);
   const m = Math.max(0, Math.min(100,
     Math.round((cpR * 0.15 + exR * 0.25 + qR * 0.50 + tR * 0.10) * 100)));
   return { m, lv: m >= 75 ? 'done' : (m >= 40 ? 'mid' : 'low'),
-           exSeen, nEx, answered, nQ, corr, cpRead, nCp, secs: st.seconds || 0 };
+           exSeen, nEx, answered, nQ, corr: corrQuiz + corrSc, cpRead, nCp,
+           scDone: scKeys.length, scCorr: corrSc, secs: st.seconds || 0 };
 }
 function overall() {
   let done = 0, mid = 0, zero = 0, sum = 0;
@@ -314,8 +319,147 @@ function markPath() {
 }
 
 /* ================= 视图：知识点 ================= */
-function viewKP(id, forceTop) {
-  const k = BY_ID[id];
+/* 每个知识点的分节结果 —— 只算一次。
+   概念讲解的展示与自检题生成**必须共用同一份分节**，否则题面里的「本节」
+   会和屏幕上那一节对不上（splitPoints 有随机性为零但依赖输入的合并规则）。 */
+const _secCache = new Map();
+function sectionsOf(k) {
+  if (!_secCache.has(k.id)) {
+    _secCache.set(k.id, (k.concept || []).map((p, i) => ({ i, ...splitPoints(p, { leadMax: 46, maxPts: 12 }) })));
+  }
+  return _secCache.get(k.id);
+}
+function sectionTitle(s, idx) {
+  return s.lead ? briefTitle(s.lead, 18) : briefTitle(s.pts[0] || ('第 ' + (idx + 1) + ' 部分'), 18);
+}
+function otherSections(k) {
+  const out = [];
+  KP.forEach(o => { if (o.id !== k.id) sectionsOf(o).forEach(s => out.push(s)); });
+  return out;
+}
+
+/* ================= 自检区 =================
+   点「学习完毕」（✓）后，这一节的讲解被收起成一块空白；**点空白才出题**。
+   题目由 SELFCHECK 从本节原文派生（设计取舍见 assets/selfcheck.js 顶部注释）。
+   作答记录存 st.selfcheck["<节序>:<题序>"] = true/false，并计入掌握度的答题正确率。 */
+function selfCheckBody(k, idx, secs, title) {
+  const st = kpS(k.id);
+  if (!st.selfcheck) st.selfcheck = {};
+  const built = (typeof SELFCHECK !== 'undefined')
+    ? SELFCHECK.build(k, idx, secs, { title, otherKPs: otherSections(k) })
+    : { qs: [], pts: [] };
+  const qs = built.qs || [];
+
+  const blank = h(`<div class="sc-blank" role="button" tabindex="0">
+    <div class="sc-ico">?</div>
+    <div class="sc-t">本节已标记掌握 · 讲解已收起</div>
+    <div class="sc-s">${qs.length
+      ? '点这里自检 · ' + qs.length + ' 题 · 答完即时判对错'
+      : '点这里逐条回忆本节要点'}</div>
+  </div>`);
+  const panel = h(`<div class="sc-panel" hidden></div>`);
+  const wrap = h(`<div class="sczone"></div>`);
+  wrap.appendChild(blank);
+  wrap.appendChild(panel);
+
+  function reveal() {
+    blank.hidden = true;
+    panel.hidden = false;
+    if (!panel.dataset.built) { panel.dataset.built = '1'; buildPanel(); }
+  }
+  blank.onclick = reveal;
+  blank.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); reveal(); } };
+
+  function buildPanel() {
+    if (!qs.length) {
+      panel.appendChild(h(`<div class="sc-note">本节以叙述为主，没有可自动出题的定义式。逐条回忆下面每一条，想不起来再点开核对。</div>`));
+      const ul = h(`<ul class="sc-recall"></ul>`);
+      (built.pts || []).forEach((p, i) => {
+        const body = h(`<div class="sc-rb" hidden>${p}</div>`);
+        const li = h(`<li><span class="sc-rh">要点 ${i + 1} · 点击展开</span></li>`);
+        li.appendChild(body);
+        li.querySelector('.sc-rh').onclick = () => { body.hidden = !body.hidden; li.classList.toggle('on'); };
+        ul.appendChild(li);
+      });
+      panel.appendChild(ul);
+      return;
+    }
+    const sum = h(`<div class="sc-sum"></div>`);
+    qs.forEach((q, qi) => {
+      const key = idx + ':' + qi;
+      const box = h(`<div class="sc-q" data-qi="${qi}">
+        <div class="sc-stem"><b>Q${qi + 1}</b><span>${q.stem}</span></div>
+        <div class="sc-opts"></div>
+        <div class="sc-fb" hidden></div>
+      </div>`);
+      const opts = box.querySelector('.sc-opts');
+      q.options.forEach((o, oi) => {
+        const b = h(`<button class="sc-opt" data-oi="${oi}"><i>${'ABCD'[oi]}</i><span>${o}</span></button>`);
+        b.onclick = () => {
+          if (box.dataset.done) return;
+          const ok = (oi === q.answer);
+          st.selfcheck[key] = ok;
+          save(); hud(); renderPath();
+          paint(box, q, ok, oi);
+          refreshSum();
+        };
+        opts.appendChild(b);
+      });
+      // 已经有作答记录 → 直接回放（标出正确项，不重复计分）
+      if (key in st.selfcheck) paint(box, q, st.selfcheck[key], null);
+      panel.appendChild(box);
+    });
+    panel.appendChild(sum);
+    refreshSum();
+
+    function refreshSum() {
+      const keys = qs.map((_, qi) => idx + ':' + qi).filter(k2 => k2 in st.selfcheck);
+      const right = keys.filter(k2 => st.selfcheck[k2]).length;
+      sum.textContent = keys.length
+        ? `本节自检：答对 ${right} / ${keys.length} 题${keys.length === qs.length ? '（已做完）' : ''}`
+        : `本节自检共 ${qs.length} 题，选一个选项即可判对错`;
+      sum.className = 'sc-sum' + (keys.length === qs.length ? (right === qs.length ? ' all' : ' part') : '');
+    }
+
+    /* 上色 + 反馈。chosen 为 null 表示回放历史作答（不标"选错哪个"） */
+    function paint(box, q, ok, chosen) {
+      box.dataset.done = '1';
+      box.classList.add(ok ? 'ok' : 'no');
+      box.querySelectorAll('.sc-opt').forEach((b, i2) => {
+        b.disabled = true;
+        if (i2 === q.answer) b.classList.add('right');
+        if (chosen != null && i2 === chosen && !ok) b.classList.add('wrong');
+      });
+      const fb = box.querySelector('.sc-fb');
+      fb.hidden = false;
+      fb.innerHTML = `<div class="sc-verdict ${ok ? 'ok' : 'no'}">${ok ? '✓ 答对了' : '✗ 答错了'}</div>
+        <div class="sc-why">${q.why}</div>`;
+    }
+  }
+
+  return wrap;
+}
+
+/* 供自动化测试读取分节与自检题（只读查表，不改变任何运行时行为）。
+   为什么要开这个口子：splitPoints 在闭包里，测试若要自己复刻一套，
+   两边迟早会漂移 —— 那正是「测试与实现脱节」的来源。 */
+window.__a26 = {
+  sectionsOf,
+  sectionTitle,
+  buildSelfCheck: (kpId, idx) => {
+    const k = KP.find(x => x.id === kpId);
+    if (!k || typeof SELFCHECK === 'undefined') return null;
+    const secs = sectionsOf(k);
+    return SELFCHECK.build(k, idx, secs, { title: sectionTitle(secs[idx], idx), otherKPs: otherSections(k) });
+  },
+  sectionCount: (kpId) => {
+    const k = KP.find(x => x.id === kpId);
+    return k ? sectionsOf(k).length : 0;
+  },
+  kpIds: () => KP.map(k => k.id),
+};
+
+function viewKP(id, forceTop) {  const k = BY_ID[id];
   if (!k) { $('#view').innerHTML = `<div class="empty"><div class="big">🔍</div>没有找到知识点 ${esc(id)}</div>`; return; }
   S.cur = id; save(); markPath();
 
@@ -356,10 +500,7 @@ function viewKP(id, forceTop) {
 
   /* 概念讲解 —— 分点卡片：默认展开条目，可折叠、可勾选「懂了」 */
   if ((k.concept || []).length) {
-    const secs = k.concept.map((p, i) => {
-      const r = splitPoints(p, { leadMax: 46, maxPts: 12 });
-      return { i, ...r };
-    });
+    const secs = sectionsOf(k);
     const read = S.kp[k.id] && S.kp[k.id].conceptRead || [];
     const total = secs.length;
     const doneN = read.filter(x => x < total).length;
@@ -378,22 +519,34 @@ function viewKP(id, forceTop) {
 
     const list = card.querySelector('#cpt-list');
     secs.forEach((s, idx) => {
-      const isRead = read.includes(idx);
       const cnt = s.pts.length;
-      const title = s.lead ? briefTitle(s.lead, 18) : briefTitle(s.pts[0] || ('第 ' + (idx + 1) + ' 部分'), 18);
-      const el = h(`<div class="cpt open ${isRead ? 'read' : ''}" data-i="${idx}">
+      const title = sectionTitle(s, idx);
+      const el = h(`<div class="cpt open" data-i="${idx}">
         <div class="cpt-h">
           <span class="cpt-n">${idx + 1}</span>
           <span class="cpt-t">${esc(title)}</span>
           <span class="cpt-cnt">${cnt ? cnt + ' 条' : ''}</span>
-          <button class="cpt-ok" title="标记这一节我已掌握">✓</button>
+          <button class="cpt-ok" title="标记这一节我已掌握（标记后讲解收起，改为自检）">✓</button>
           <span class="cpt-arw">▾</span>
         </div>
-        <div class="cpt-b">
-          ${s.lead ? `<p class="cpt-lead">${s.lead}</p>` : ''}
-          ${cnt ? `<ul class="ptlist tight">${s.pts.map(x => `<li>${x}</li>`).join('')}</ul>` : ''}
-        </div>
+        <div class="cpt-b"></div>
       </div>`);
+      const body = el.querySelector('.cpt-b');
+      const contentHTML = `${s.lead ? `<p class="cpt-lead">${s.lead}</p>` : ''}` +
+        `${cnt ? `<ul class="ptlist tight">${s.pts.map(x => `<li>${x}</li>`).join('')}</ul>` : ''}`;
+
+      /* 正文在两态之间切换：
+         未标记 → 正常讲解；已标记 → 一块空白自检区（点开才出题）。
+         这一函数是唯一的切换入口，✓ 与「重置」都走它。 */
+      function renderBody() {
+        const on = (kpS(k.id).conceptRead || []).includes(idx);
+        el.classList.toggle('read', on);
+        body.innerHTML = '';
+        if (on) body.appendChild(selfCheckBody(k, idx, secs, title));
+        else body.innerHTML = contentHTML;
+      }
+      renderBody();
+
       el.querySelector('.cpt-h').onclick = ev => {
         if (ev.target.closest('.cpt-ok')) return;
         el.classList.toggle('open');
@@ -404,7 +557,8 @@ function viewKP(id, forceTop) {
         if (!st.conceptRead) st.conceptRead = [];
         const at = st.conceptRead.indexOf(idx);
         if (at >= 0) st.conceptRead.splice(at, 1); else st.conceptRead.push(idx);
-        el.classList.toggle('read', at < 0);
+        renderBody();
+        if (at < 0) el.classList.add('open');       // 刚标记 → 展开显示自检区
         const n = (st.conceptRead || []).length;
         card.querySelector('#cpt-bar').style.width = Math.round(n / total * 100) + '%';
         card.querySelector('#cpt-hint').textContent = `${n}/${total} 已标记掌握`;
