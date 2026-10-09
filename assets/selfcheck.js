@@ -243,5 +243,146 @@
     return { qs, pts: sec.pts, lead: sec.lead || '' };
   }
 
-  global.SELFCHECK = { build, termsOf, MAX_Q, _clip: clip };
+  /* ==========================================================================
+     挖空（填空题）—— 用户要的是「关键知识点空出来」，不是把整段藏起来
+     --------------------------------------------------------------------------
+     所以这里不改动原文，只在**关键知识点**的位置插一个可点击的空格。
+     关键知识点的识别分四类，按可靠度排序：
+       A 【标题】        —— 作者自己标的重点，最可靠
+       B 称…为 TERM     —— 定义句里的术语，必考
+       C 「术语」        —— 作者特意加引号的词
+       D 带学科后缀的词  —— ××矩阵 / ××范数 / ××分解 / ××判别法 / 主子式 …
+     重叠时保留最长的那个（"矩阵范数" 与 "范数" 只留前者）。
+     **不在 <math> 公式块内部挖空** —— 公式里插空格会破坏 MathML 排版，
+     而且「公式填空」该由例题承担，不是概念挖空该干的事。
+     ======================================================================== */
+  const GAP_SUFFIX = '矩阵|范数|分解|公式|定理|判别法|准则|标准型|主子式|惯性指数|谱半径|' +
+                     '特征值|奇异值|方程组|多项式|展开式|余项|节点|系数|正交|对称|' +
+                     '正定|半正定|等价|相容|酉|幂等|正规|收敛|稳定';
+  const RE_GAP = [
+    { kind: 'A', re: /【([^】]{2,16})】/g },
+    { kind: 'B', re: /称\s*[^，。；（）()]{0,10}?为\s*([^，。；、（）()]{2,16})/g },
+    { kind: 'C', re: /「([^」]{2,16})」/g },
+    { kind: 'D', re: new RegExp('([\\u4e00-\\u9fa5A-Za-z][\\u4e00-\\u9fa50-9A-Za-z]{0,6}(?:' + GAP_SUFFIX + '))', 'g') },
+  ];
+
+  /* 取一个条目里所有可挖空的位置。
+     先把 <math>…</math> 换成定长外的占位符并记录映射，匹配完再映射回原串坐标；
+     落在公式内部的命中一律丢弃。 */
+  function gapSpans(pt) {
+    const s = String(pt || '');
+    const blocks = [];
+    const prot = s.replace(RE_MATHBLOCK, (m) => {
+      blocks.push(m);
+      return '\u0002' + (blocks.length - 1) + '\u0002';
+    });
+    // 建「保护串下标 → 原串下标」映射；公式占位符映射为 null（不可挖）
+    const map = [];
+    let k = 0;
+    for (let i = 0; i < prot.length;) {
+      if (prot[i] === '\u0002') {
+        const j = prot.indexOf('\u0002', i + 1);
+        const len = blocks[+prot.slice(i + 1, j)].length;
+        for (let t = 0; t < len; t++) map.push(null);
+        i = j + 1;
+      } else {
+        map.push(k++);
+        i++;
+      }
+    }
+    const out = [];
+    RE_GAP.forEach(({ kind, re }) => {
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(prot)) !== null) {
+        const term = m[1];
+        if (!term || term.length < 2) continue;
+        const gs = m.index + m[0].indexOf(term), ge = gs + term.length;
+        const idx = [];
+        let blocked = false;
+        for (let i = gs; i < ge; i++) {
+          if (map[i] === null || map[i] === undefined) { blocked = true; break; }
+          idx.push(map[i]);
+        }
+        if (blocked || !idx.length) continue;
+        out.push({ from: idx[0], to: idx[idx.length - 1] + 1, term, kind });
+      }
+    });
+    // 去重叠：起点排序，重叠时保留更长的
+    out.sort((a, b) => a.from - b.from || (b.to - b.from) - (a.to - a.from));
+    const kept = [];
+    for (const g of out) {
+      if (kept.some(x => g.from < x.to && x.from < g.to)) continue;
+      kept.push(g);
+    }
+    return kept.sort((a, b) => a.from - b.from);
+  }
+
+  function termBank(sections) {
+    const all = [];
+    (sections || []).forEach((s) => (s.pts || []).forEach((p) => {
+      gapSpans(p).forEach((g) => all.push(g.term));
+    }));
+    return dedup(all);
+  }
+
+  /**
+   * 生成挖空版：**原文一字不改**，只标出挖哪几处、每处的选项。
+   * 返回 { items: [{ text, gaps: [{from,to,term,options,answer,why}] }], total }
+   */
+  function buildCloze(kp, secIdx, sections, opts) {
+    opts = opts || {};
+    const sec = sections[secIdx];
+    if (!sec || !(sec.pts || []).length) return { items: [], total: 0, pts: [] };
+    const rnd = rng(seedOf('cloze' + (kp.id || '') + '#' + secIdx));
+    // 分层取池：本知识点优先，且优先同后缀（"××矩阵"配"××矩阵"）。
+    // 早先版本把本 KP 与全库的术语拼成一个大池随机取，结果 K19 的「恒正」
+    // 会配上「级数收敛 / 收敛矩阵」这种跨章节的词 —— 一眼就能排除，等于没考。
+    const myTerms = termBank(sections).concat(termBank(opts.selfExtra || []));
+    const farTerms = termBank(opts.otherKPs || []);
+    function candidatesFor(term) {
+      const key = norm(term), suf = term.slice(-2);
+      const sameSuf = (x) => x.slice(-2) === suf;
+      const nearLen = (x) => Math.abs(x.length - term.length) <= Math.max(3, term.length);
+      const f = (arr, pred) => arr.filter(x => norm(x) !== key && pred(x));
+      const tiers = [
+        f(myTerms, x => sameSuf(x) && nearLen(x)),   // 同 KP + 同后缀 + 近长度（最像）
+        f(myTerms, sameSuf),                          // 同 KP + 同后缀
+        f(myTerms, nearLen),                          // 同 KP + 近长度
+        f(myTerms, () => true),                       // 同 KP 任意
+        f(farTerms, sameSuf),                         // 退到全库，但至少同后缀
+        f(farTerms, () => true),
+      ];
+      return tiers.find(a => a.length >= 3) || [];
+    }
+
+    const MAX_GAP = 6;                 // 每节最多挖 6 个空，避免满屏都是空
+    let budget = MAX_GAP;
+    const used = new Set();
+    const items = [];
+    (sec.pts || []).forEach((text) => {
+      const gaps = [];
+      if (budget > 0) {
+        for (const g of gapSpans(text)) {
+          if (budget <= 0) break;
+          const key = norm(g.term);
+          if (used.has(key)) continue;
+          const cands = candidatesFor(g.term);
+          if (cands.length < 3) continue;
+          const o4 = shuffle(pick(cands, 3, rnd).concat([g.term]), rnd);
+          used.add(key);
+          budget--;
+          gaps.push({
+            from: g.from, to: g.to, term: g.term,
+            options: o4, answer: o4.indexOf(g.term),
+            why: '原文此处是「' + g.term + '」',
+          });
+        }
+      }
+      items.push({ text, gaps });
+    });
+    return { items, total: items.reduce((n, it) => n + it.gaps.length, 0), pts: sec.pts, lead: sec.lead || '' };
+  }
+
+  global.SELFCHECK = { build, buildCloze, gapSpans, termBank, termsOf, MAX_Q, _clip: clip };
 })(window);

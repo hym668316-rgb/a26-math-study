@@ -7,7 +7,7 @@
 /* ================= 数据聚合 ================= */
 /* 各数据模块由不同来源产出，各自的 level 是「模块内相对层级」，
    这里按全局规范顺序统一重排，保证递进序号 1..N 连续且唯一。 */
-const ORDER = ['K01','K02','K03','K04','K05','K06','K07','K08','K09','K10','K11',
+const ORDER = ['K01','K02','K03','K19','K04','K05','K06','K07','K08','K09','K10','K11',
                'K12','K13','K14','K15','K16','K17','K18'];
 const KP = []
   .concat(window.KP_A || [], window.KP_B || [], window.KP_C || [], window.KP_D || [])
@@ -338,105 +338,141 @@ function otherSections(k) {
   return out;
 }
 
-/* ================= 自检区 =================
-   点「学习完毕」（✓）后，这一节的讲解被收起成一块空白；**点空白才出题**。
-   题目由 SELFCHECK 从本节原文派生（设计取舍见 assets/selfcheck.js 顶部注释）。
-   作答记录存 st.selfcheck["<节序>:<题序>"] = true/false，并计入掌握度的答题正确率。 */
+/* ================= 自检区（挖空版） =================
+   用户要的是**关键知识点挖空**，不是把整段藏起来：
+   · 原文一字不改地留在屏幕上，只在关键知识点位置插一个可点击的空格；
+   · 点空格 → 就地弹出 4 个选项的选择题（干扰项取同知识点、同后缀的词）；
+   · 选完 → 即时判对错、把正确答案填回空格里、并给出原文依据。
+   作答记录 st.cloze["<节序>:<点序>:<空序>"] = true/false，
+   与课后习题一起计入掌握度的「答题正确率」。 */
 function selfCheckBody(k, idx, secs, title) {
   const st = kpS(k.id);
-  if (!st.selfcheck) st.selfcheck = {};
-  const built = (typeof SELFCHECK !== 'undefined')
-    ? SELFCHECK.build(k, idx, secs, { title, otherKPs: otherSections(k) })
-    : { qs: [], pts: [] };
-  const qs = built.qs || [];
+  if (!st.cloze) st.cloze = {};
+  const built = (typeof SELFCHECK !== 'undefined' && SELFCHECK.buildCloze)
+    ? SELFCHECK.buildCloze(k, idx, secs, { otherKPs: otherSections(k) })
+    : { items: [], total: 0 };
+  const items = built.items || [];
+  const total = built.total || 0;
 
-  const blank = h(`<div class="sc-blank" role="button" tabindex="0">
-    <div class="sc-ico">?</div>
-    <div class="sc-t">本节已标记掌握 · 讲解已收起</div>
-    <div class="sc-s">${qs.length
-      ? '点这里自检 · ' + qs.length + ' 题 · 答完即时判对错'
-      : '点这里逐条回忆本节要点'}</div>
+  const wrap = h(`<div class="sczone cloze"></div>`);
+  const bar = h(`<div class="scz-bar">
+    <span class="scz-info"></span>
+    <button class="tbtn scz-reveal">全部揭示</button>
+    <button class="tbtn scz-reset">重做本节</button>
   </div>`);
-  const panel = h(`<div class="sc-panel" hidden></div>`);
-  const wrap = h(`<div class="sczone"></div>`);
-  wrap.appendChild(blank);
-  wrap.appendChild(panel);
+  wrap.appendChild(bar);
+  // 导语（这一节的总起句）照原样保留 —— 改写成挖空版时漏过一次，正文会少开头一句
+  if (built.lead) wrap.appendChild(h(`<p class="cpt-lead">${built.lead}</p>`));
+  const ul = h(`<ul class="ptlist tight scz-list"></ul>`);
+  wrap.appendChild(ul);
 
-  function reveal() {
-    blank.hidden = true;
-    panel.hidden = false;
-    if (!panel.dataset.built) { panel.dataset.built = '1'; buildPanel(); }
+  if (!total) {
+    ul.appendChild(h(`<li class="scz-none">本节没有识别出可挖空的关键术语（多为叙述性文字），已保留原文，可直接阅读。</li>`));
   }
-  blank.onclick = reveal;
-  blank.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); reveal(); } };
 
-  function buildPanel() {
-    if (!qs.length) {
-      panel.appendChild(h(`<div class="sc-note">本节以叙述为主，没有可自动出题的定义式。逐条回忆下面每一条，想不起来再点开核对。</div>`));
-      const ul = h(`<ul class="sc-recall"></ul>`);
-      (built.pts || []).forEach((p, i) => {
-        const body = h(`<div class="sc-rb" hidden>${p}</div>`);
-        const li = h(`<li><span class="sc-rh">要点 ${i + 1} · 点击展开</span></li>`);
-        li.appendChild(body);
-        li.querySelector('.sc-rh').onclick = () => { body.hidden = !body.hidden; li.classList.toggle('on'); };
-        ul.appendChild(li);
-      });
-      panel.appendChild(ul);
+  const gapMeta = [];   // { id, g, btn }
+
+  function refreshBar() {
+    const filled = gapMeta.filter(x => x.id in st.cloze);
+    const right = filled.filter(x => st.cloze[x.id]).length;
+    bar.querySelector('.scz-info').innerHTML = total
+      ? `本节共 <b>${total}</b> 个关键知识点 · 已填 <b>${filled.length}</b> · 答对 <b>${right}</b>`
+        + (filled.length === total ? (right === total ? ' <span class="ok">🎉 全对</span>'
+                                                      : ' <span class="part">还有错的，点「重做本节」再来</span>') : '')
+      : '';
+  }
+
+  function fillGap(btn, id, g, ok, chosen) {
+    btn.textContent = g.term;
+    btn.disabled = true;
+    btn.classList.add(ok ? 'ok' : 'no');
+    btn.title = ok ? '答对了' : '答错了，正确答案是「' + g.term + '」';
+  }
+
+  function openGap(li, btn, id, g) {
+    li.querySelectorAll('.sc-gapopts').forEach(e => e.remove());   // 一次只开一个
+    const box = h(`<div class="sc-gapopts"><div class="sc-go-h">此处应填</div>
+      <div class="sc-go-row"></div><div class="sc-go-fb" hidden></div></div>`);
+    const row = box.querySelector('.sc-go-row');
+    const done = (id in st.cloze);
+    g.options.forEach((o, oi) => {
+      const b = h(`<button class="sc-opt mini" data-oi="${oi}">${'ABCD'[oi]}. ${o}</button>`);
+      b.onclick = () => {
+        if (btn.disabled) return;
+        const ok = (oi === g.answer);
+        st.cloze[id] = ok;
+        save(); hud(); renderPath();
+        fillGap(btn, id, g, ok, oi);
+        paintRow(row, g, oi, ok);
+        const fb = box.querySelector('.sc-go-fb');
+        fb.hidden = false;
+        fb.innerHTML = `<b class="${ok ? 'ok' : 'no'}">${ok ? '✓ 答对了' : '✗ 答错了'}</b>
+          <span class="sc-go-why">${g.why}</span>`;
+        refreshBar();
+      };
+      row.appendChild(b);
+    });
+    if (done) {   // 回放历史作答：标出正确项，不允许再点
+      paintRow(row, g, null, st.cloze[id]);
+    }
+    li.appendChild(box);
+  }
+
+  function paintRow(row, g, chosen, ok) {
+    row.querySelectorAll('.sc-opt').forEach((b, i) => {
+      b.disabled = true;
+      if (i === g.answer) b.classList.add('right');
+      if (chosen != null && i === chosen && !ok) b.classList.add('wrong');
+    });
+  }
+
+  items.forEach((it, pi) => {
+    const li = h(`<li></li>`);
+    if (!it.gaps.length) {
+      li.innerHTML = it.text;
+      ul.appendChild(li);
       return;
     }
-    const sum = h(`<div class="sc-sum"></div>`);
-    qs.forEach((q, qi) => {
-      const key = idx + ':' + qi;
-      const box = h(`<div class="sc-q" data-qi="${qi}">
-        <div class="sc-stem"><b>Q${qi + 1}</b><span>${q.stem}</span></div>
-        <div class="sc-opts"></div>
-        <div class="sc-fb" hidden></div>
-      </div>`);
-      const opts = box.querySelector('.sc-opts');
-      q.options.forEach((o, oi) => {
-        const b = h(`<button class="sc-opt" data-oi="${oi}"><i>${'ABCD'[oi]}</i><span>${o}</span></button>`);
-        b.onclick = () => {
-          if (box.dataset.done) return;
-          const ok = (oi === q.answer);
-          st.selfcheck[key] = ok;
-          save(); hud(); renderPath();
-          paint(box, q, ok, oi);
-          refreshSum();
-        };
-        opts.appendChild(b);
-      });
-      // 已经有作答记录 → 直接回放（标出正确项，不重复计分）
-      if (key in st.selfcheck) paint(box, q, st.selfcheck[key], null);
-      panel.appendChild(box);
+    let html = '', last = 0;
+    it.gaps.forEach((g, gi) => {
+      html += it.text.slice(last, g.from);
+      const id = idx + ':' + pi + ':' + gi;
+      html += `<button class="sc-gap" data-id="${id}" title="点击选择答案">?</button>`;
+      gapMeta.push({ id, g, btn: null });
+      last = g.to;
     });
-    panel.appendChild(sum);
-    refreshSum();
+    html += it.text.slice(last);
+    li.innerHTML = html;
 
-    function refreshSum() {
-      const keys = qs.map((_, qi) => idx + ':' + qi).filter(k2 => k2 in st.selfcheck);
-      const right = keys.filter(k2 => st.selfcheck[k2]).length;
-      sum.textContent = keys.length
-        ? `本节自检：答对 ${right} / ${keys.length} 题${keys.length === qs.length ? '（已做完）' : ''}`
-        : `本节自检共 ${qs.length} 题，选一个选项即可判对错`;
-      sum.className = 'sc-sum' + (keys.length === qs.length ? (right === qs.length ? ' all' : ' part') : '');
-    }
+    it.gaps.forEach((g, gi) => {
+      const id = idx + ':' + pi + ':' + gi;
+      const btn = li.querySelector(`.sc-gap[data-id="${id}"]`);
+      if (!btn) return;
+      const meta = gapMeta.find(x => x.id === id);
+      if (meta) meta.btn = btn;
+      btn.onclick = () => openGap(li, btn, id, g);
+      if (id in st.cloze) fillGap(btn, id, g, st.cloze[id], null);   // 刷新后回放
+    });
+    ul.appendChild(li);
+  });
 
-    /* 上色 + 反馈。chosen 为 null 表示回放历史作答（不标"选错哪个"） */
-    function paint(box, q, ok, chosen) {
-      box.dataset.done = '1';
-      box.classList.add(ok ? 'ok' : 'no');
-      box.querySelectorAll('.sc-opt').forEach((b, i2) => {
-        b.disabled = true;
-        if (i2 === q.answer) b.classList.add('right');
-        if (chosen != null && i2 === chosen && !ok) b.classList.add('wrong');
-      });
-      const fb = box.querySelector('.sc-fb');
-      fb.hidden = false;
-      fb.innerHTML = `<div class="sc-verdict ${ok ? 'ok' : 'no'}">${ok ? '✓ 答对了' : '✗ 答错了'}</div>
-        <div class="sc-why">${q.why}</div>`;
-    }
+  bar.querySelector('.scz-reveal').onclick = () => {
+    gapMeta.forEach(({ id, g, btn }) => { if (btn && !btn.disabled) fillGap(btn, id, g, true, null); });
+  };
+  bar.querySelector('.scz-reset').onclick = () => {
+    gapMeta.forEach(({ id }) => { delete st.cloze[id]; });
+    save(); hud(); renderPath();
+    renderBodyRefresh();
+  };
+  // 重做：直接重建这一节的正文（最简单的无状态做法）
+  function renderBodyRefresh() {
+    const host = wrap.parentElement;
+    if (!host) return;
+    host.innerHTML = '';
+    host.appendChild(selfCheckBody(k, idx, secs, title));
   }
 
+  refreshBar();
   return wrap;
 }
 
@@ -451,6 +487,14 @@ window.__a26 = {
     if (!k || typeof SELFCHECK === 'undefined') return null;
     const secs = sectionsOf(k);
     return SELFCHECK.build(k, idx, secs, { title: sectionTitle(secs[idx], idx), otherKPs: otherSections(k) });
+  },
+  kpById: (kpId) => KP.find(x => x.id === kpId) || null,
+  /** 挖空版：返回这一节该挖哪些空、每个空的选项 */
+  buildCloze: (kpId, idx) => {
+    const k = KP.find(x => x.id === kpId);
+    if (!k || typeof SELFCHECK === 'undefined' || !SELFCHECK.buildCloze) return null;
+    const secs = sectionsOf(k);
+    return SELFCHECK.buildCloze(k, idx, secs, { otherKPs: otherSections(k) });
   },
   sectionCount: (kpId) => {
     const k = KP.find(x => x.id === kpId);
@@ -1251,7 +1295,17 @@ function route() {
   if (hh === '#/practice') { render(1); return viewPractice(); }
   if (hh === '#/qa') { render(2); return viewQA(); }
   if (hh === '#/mastery') { render(3); return viewMastery(); }
+  if (hh === '#/notes') { render(4); return viewNotes(); }
   render(0); viewHome();
+}
+/* 笔记照片视图 —— 实现放在 assets/notes.js（自包含），这里只做路由转发 */
+function viewNotes() {
+  const v = $('#view');
+  v.innerHTML = '';
+  if (window.NOTES_VIEW) window.NOTES_VIEW.render(v);
+  else v.appendChild(h(`<div class="card"><div class="card-h"><i class="bar"></i>笔记照片</div>
+    <div style="padding:16px;color:var(--ink-3)">notes.js 未加载</div></div>`));
+  window.scrollTo({ top: 0 });
 }
 function render(tabIdx) {
   document.querySelectorAll('#tabs .tab').forEach((t, i) => t.classList.toggle('active', i === tabIdx));

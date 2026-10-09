@@ -1,0 +1,1 @@
+window.NOTES={"generated":"2026-10-09 20:19","total":2,"groups":[{"name":"数值积分","items":[{"t":"截图_001","f":"notes/001.jpg","s":"notes/001_t.jpg","w":1600,"h":900,"kb":58}]},{"name":"矩阵论","items":[{"t":"IMG_0001","f":"notes/002.jpg","s":"notes/002_t.jpg","w":1200,"h":1600,"kb":123}]}]};

@@ -544,86 +544,127 @@ table.tbl tr:hover td{background:var(--surface-2)}
 }
 
 /* ===========================================================================
-   自检区 —— 点「学习完毕」(✓) 后，讲解收成一块空白；点空白才出题。
-   仅在 .cpt.read 状态下出现，未标记掌握时完全不影响原有讲解样式。
+   自检区（挖空版）—— 点「学习完毕」(✓) 后，原文保留在屏幕上，
+   只把**关键知识点**挖成可点击的空格；点空格就地弹出选择题。
    =========================================================================== */
-.sczone{padding:2px 0 4px}
+.sczone.cloze{padding:2px 0 4px}
 
-/* 空白块：要一眼看出"这里是可以点的"，但又不能喧宾夺主 */
-.sc-blank{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
-  min-height:112px;padding:20px 18px;cursor:pointer;text-align:center;
-  border:1.5px dashed var(--orange-line);border-radius:12px;
-  background:repeating-linear-gradient(135deg,var(--surface-2) 0 10px,#fff 10px 20px);
-  transition:.16s;
+/* 工具条：本节共几个空、填了几个、对了几个 */
+.scz-bar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 11px;margin-bottom:9px;border-radius:9px;
+  background:var(--surface-2);border:1px solid var(--line);
 }
-.sc-blank:hover{border-color:var(--orange);background:repeating-linear-gradient(135deg,#FFF6EC 0 10px,#fff 10px 20px)}
-.sc-blank:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
-.sc-ico{
-  width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
-  font-weight:800;font-size:17px;color:#fff;background:var(--orange-gfx);
-}
-.sc-t{font-size:13.6px;font-weight:700;color:var(--ink)}
-.sc-s{font-size:12.4px;color:var(--ink-3)}
+.scz-info{flex:1;font-size:12.6px;color:var(--ink-2)}
+.scz-info b{color:var(--primary);font-size:13.4px}
+.scz-info .ok{color:#3E7F4E;font-weight:700}
+.scz-info .part{color:#9A6304;font-weight:700}
+.scz-bar .tbtn{padding:4px 10px;font-size:12px}
 
-/* 题目面板 */
-.sc-panel{display:flex;flex-direction:column;gap:12px}
-.sc-note{
-  font-size:12.6px;color:var(--ink-2);background:var(--surface-2);
-  border-left:3px solid var(--orange-line);border-radius:0 8px 8px 0;padding:8px 11px;
-}
-.sc-q{border:1px solid var(--line);border-radius:11px;padding:12px 13px;background:#fff;transition:.16s}
-.sc-q.ok{border-color:#9CCFA6;background:#F5FBF6}
-.sc-q.no{border-color:#E7B4AE;background:#FEF7F6}
-.sc-stem{display:flex;gap:8px;font-size:13.8px;line-height:1.62;color:var(--ink);margin-bottom:9px}
-.sc-stem b{
-  flex:0 0 auto;font-size:11.5px;font-weight:800;color:#fff;background:var(--orange-gfx);
-  border-radius:6px;padding:1px 7px;height:fit-content;margin-top:2px;
-}
-.sc-opts{display:flex;flex-direction:column;gap:6px}
-.sc-opt{
-  display:flex;gap:9px;align-items:flex-start;width:100%;text-align:left;cursor:pointer;
-  border:1px solid var(--line);background:#fff;border-radius:9px;
-  padding:8px 11px;font-size:13.2px;line-height:1.6;color:var(--ink);transition:.14s;
-  font-family:inherit;
-}
-.sc-opt:hover:not(:disabled){border-color:var(--orange);background:#FFFBF6}
-.sc-opt:disabled{cursor:default}
-.sc-opt i{
-  flex:0 0 auto;font-style:normal;font-weight:800;font-size:11.5px;color:var(--ink-3);
-  border:1px solid var(--line);border-radius:5px;padding:0 5px;margin-top:1px;
-}
-.sc-opt.right{border-color:#7FB98C;background:#EDF8F0}
-.sc-opt.right i{color:#fff;background:#4E9A61;border-color:#4E9A61}
-.sc-opt.wrong{border-color:#D89B93;background:#FDF1EF}
-.sc-opt.wrong i{color:#fff;background:#C0605A;border-color:#C0605A}
-.sc-fb{margin-top:9px;padding-top:9px;border-top:1px dashed var(--line-2)}
-.sc-verdict{font-size:12.8px;font-weight:800;margin-bottom:4px}
-.sc-verdict.ok{color:#3E7F4E}
-.sc-verdict.no{color:#B04A44}
-.sc-why{font-size:12.4px;line-height:1.7;color:var(--ink-2)}
-.sc-sum{
-  font-size:12.6px;color:var(--ink-3);text-align:center;padding:6px 0 2px;
-  border-top:1px dashed var(--line-2);margin-top:2px;
-}
-.sc-sum.all{color:#3E7F4E;font-weight:700}
-.sc-sum.part{color:#9A6304;font-weight:700}
+.scz-list li{line-height:2.05}          /* 挖空处有按钮，行高放宽一点更好点 */
+.scz-none{list-style:none;color:var(--ink-3);font-size:12.8px;line-height:1.8}
 
-/* 无选择题时的兜底：逐条回忆清单 */
-.sc-recall{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
-.sc-recall li{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
-.sc-recall li.on{border-color:var(--orange-line);background:#FFFBF6}
-.sc-rh{
-  display:block;padding:9px 12px;cursor:pointer;font-size:13px;font-weight:600;color:var(--primary);
-  user-select:none;
+/* 空格本体：要一眼看出"这里可以点"，又不能把句子割裂得太厉害 */
+.sc-gap{
+  display:inline-block;min-width:56px;margin:0 3px;padding:0 9px;
+  border:0;border-bottom:2px solid var(--orange);border-radius:4px 4px 0 0;
+  background:linear-gradient(180deg,rgba(255,159,67,.13),rgba(255,159,67,.05));
+  color:var(--orange-ink);font-weight:800;font-size:12.6px;font-family:inherit;
+  cursor:pointer;vertical-align:baseline;line-height:1.5;transition:.14s;
 }
-.sc-rh::before{content:'▸ ';color:var(--ink-3)}
-.sc-recall li.on .sc-rh::before{content:'▾ '}
-.sc-rb{padding:0 12px 11px;font-size:13.2px;line-height:1.75;color:var(--ink)}
+.sc-gap:hover{background:rgba(255,159,67,.24);border-bottom-color:var(--orange-gfx)}
+.sc-gap:focus-visible{outline:2px solid var(--orange);outline-offset:1px}
+.sc-gap:disabled{cursor:default;font-weight:800}
+.sc-gap.ok{
+  color:#2F6B3E;border-bottom-color:#4E9A61;
+  background:rgba(126,185,140,.18);
+}
+.sc-gap.no{
+  color:#9C3F39;border-bottom-color:#C0605A;
+  background:rgba(216,155,147,.18);
+}
+/* 答错时在空格旁补一个小提示（正确答案已填进空格本身） */
+.sc-gap.no::after{content:'\2717';font-size:10px;margin-left:3px;color:#C0605A}
+
+/* 点空格后就地弹出的选项面板 */
+.sc-gapopts{
+  margin:7px 0 3px;padding:10px 12px;border-radius:10px;
+  background:#FFFBF5;border:1px solid var(--orange-line);
+  animation:sczIn .14s ease-out;
+}
+@keyframes sczIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+.sc-go-h{font-size:12px;font-weight:700;color:var(--orange-ink);margin-bottom:6px}
+.sc-go-row{display:flex;flex-wrap:wrap;gap:6px}
+.sc-opt.mini{
+  display:inline-flex;align-items:center;gap:5px;width:auto;
+  padding:5px 11px;font-size:12.6px;border-radius:8px;
+}
+.sc-go-fb{margin-top:8px;padding-top:7px;border-top:1px dashed var(--line-2);font-size:12.4px}
+.sc-go-fb b.ok{color:#3E7F4E}
+.sc-go-fb b.no{color:#B04A44}
+.sc-go-why{color:var(--ink-2);margin-left:5px}
 
 @media (max-width:560px){
-  .sc-blank{min-height:96px;padding:16px 12px}
-  .sc-q{padding:10px 10px}
-  .sc-stem{font-size:13.2px}
-  .sc-opt{font-size:12.8px;padding:7px 9px}
+  .scz-bar{padding:7px 9px}
+  .scz-info{font-size:12px}
+  .sc-gap{min-width:46px;margin:0 2px;padding:0 7px}
+  .sc-go-row{gap:5px}
+  .sc-opt.mini{padding:5px 9px;font-size:12.2px}
+}
+
+
+/* ===========================================================================
+   笔记照片画廊 —— 点「📷 笔记」标签进入
+   =========================================================================== */
+.notes-body{padding:2px 0 4px}
+.notes-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:11px}
+.nchip{
+  border:1px solid var(--line);background:#fff;color:var(--ink-2);
+  border-radius:999px;padding:4px 12px;font-size:12.4px;cursor:pointer;
+  font-family:inherit;transition:.14s;
+}
+.nchip:hover{border-color:var(--orange);color:var(--orange-ink)}
+.nchip.on{background:var(--orange-gfx);border-color:var(--orange-gfx);color:#fff;font-weight:700}
+.notes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.ncell{
+  padding:0;border:1px solid var(--line);border-radius:11px;background:#fff;
+  overflow:hidden;cursor:zoom-in;text-align:left;font-family:inherit;
+  display:flex;flex-direction:column;transition:.16s;
+}
+.ncell:hover{border-color:var(--orange);box-shadow:0 6px 18px -10px rgba(0,0,0,.35);transform:translateY(-1px)}
+.ncell img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:var(--surface-2)}
+.ncap{
+  font-size:12px;color:var(--ink-2);padding:6px 9px;line-height:1.45;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.notes-empty{text-align:center;padding:26px 16px;color:var(--ink-3)}
+.ne-ico{font-size:34px;margin-bottom:8px}
+.ne-t{font-size:14.5px;font-weight:700;color:var(--ink);margin-bottom:7px}
+.ne-s{font-size:12.8px;line-height:1.85}
+.ne-s code{background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12px}
+
+/* 灯箱 */
+.nlb{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center}
+.nlb-bg{position:absolute;inset:0;background:rgba(12,10,8,.9);backdrop-filter:blur(3px)}
+.nlb-fig{position:relative;margin:0;max-width:94vw;max-height:92vh;display:flex;flex-direction:column;align-items:center}
+.nlb-fig img{max-width:94vw;max-height:82vh;object-fit:contain;border-radius:8px;background:#fff}
+.nlb-fig figcaption{
+  margin-top:9px;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;justify-content:center;
+  color:#EDE6DF;font-size:12.6px;
+}
+.nlb-fig figcaption b{color:#fff;font-size:13.4px}
+.nlb-fig figcaption span{color:#B9AEA4}
+.nlb-x,.nlb-p,.nlb-n{
+  position:absolute;z-index:2;border:0;cursor:pointer;color:#fff;
+  background:rgba(255,255,255,.13);border-radius:50%;width:42px;height:42px;
+  font-size:19px;line-height:1;display:grid;place-items:center;transition:.14s;font-family:inherit;
+}
+.nlb-x:hover,.nlb-p:hover,.nlb-n:hover{background:rgba(255,255,255,.28)}
+.nlb-x{top:16px;right:18px}
+.nlb-p{left:16px;top:50%;transform:translateY(-50%)}
+.nlb-n{right:16px;top:50%;transform:translateY(-50%)}
+@media (max-width:560px){
+  .notes-grid{grid-template-columns:repeat(auto-fill,minmax(124px,1fr));gap:8px}
+  .nlb-p,.nlb-n{width:36px;height:36px}
+  .nlb-x{top:10px;right:10px;width:36px;height:36px}
 }
