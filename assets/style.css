@@ -468,7 +468,13 @@ ul.ptlist>li::before{background:linear-gradient(135deg,var(--orange),var(--orang
 /* 概念卡 */
 .cpt-n{background:linear-gradient(135deg,var(--orange-3),var(--orange));color:var(--black)}
 .cpt:hover{border-color:var(--primary-line);box-shadow:0 4px 14px -8px rgba(255,159,67,.45)}
-.cpt.read{background:linear-gradient(100deg,#1A2418,#1E1915);border-color:var(--ok-fill)}
+/* 标记掌握后的卡片样式。
+   ⚠️ 这里原本是深色底 `linear-gradient(100deg,#1A2418,#1E1915)` —— 那是给
+   「标记后整段内容被藏起来」的旧设计配的。2026-10-09 改成**挖空版**（原文保留、
+   只挖关键知识点）之后，深底 + 深色正文 = 几乎看不见，用户实测反馈过。
+   现改为淡绿底 + 左侧绿条：既看得出「已标记」，又不影响阅读。 */
+.cpt.read{background:linear-gradient(100deg,#F2F9F4,#FDFEFD);border-color:var(--ok-fill);
+          box-shadow:inset 3px 0 0 var(--ok-fill)}
 .cpt.read .cpt-n{background:linear-gradient(135deg,var(--orange-3),var(--orange));color:var(--black)}
 .cpt-h:hover{background:var(--primary-soft)}
 

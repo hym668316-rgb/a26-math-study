@@ -194,6 +194,22 @@ function overall() {
 /* ================= 工具 ================= */
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+/* 标题类富文本出站。
+   为什么不能直接用 esc()：`mathifyAll` 会**递归处理每一个字符串**（含 ex.title、
+   k.title、faq.q），把里面的 $...$ 换成 <math> 标签；这时再 esc() 就会把标签
+   当字面量显示 —— 用户会看到
+   「例：用特征值法判正定（识别出 <math xmlns="…">…</math> 结构）」。
+   2026-10-09 由验收套件里的「标题无实体」一项抓到。
+   正解：<math> 块原样保留（构建期由本站自己的数据生成，不含外部输入），
+   其余部分照常转义。占位符用 \u0000 包裹，esc() 不会碰它。 */
+function rich(s) {
+  const blocks = [];
+  const t = String(s == null ? '' : s).replace(RE_MATHBLOCK_G, (m) => {
+    blocks.push(m);
+    return '\u0000' + (blocks.length - 1) + '\u0000';
+  });
+  return esc(t).replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[+i]);
+}
 function h(html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstChild; }
 function toast(msg) {
   const el = $('#toast'); el.textContent = msg; el.classList.add('show');
@@ -261,16 +277,35 @@ function splitPoints(text, opt) {
   return { lead, pts: merged.map(x => restoreMath(x, spans).trim()).filter(Boolean) };
 }
 
-/* 取一句话的前 n 字做标题（去掉公式，太长则截断） */
+/* 把一段富文本压成纯文本，供标题/摘要使用。
+   ⚠️ 这两个函数原本只处理 `$...$` 原始 LaTeX —— 但**渲染时数据早已被
+   mathifyAll 换成了 <math> 标签**，于是 RE_MATHSPAN 匹配不到，
+   接着 stripTags 把公式标签剥掉、却把公式内部的实体文本留在结果里。
+   用户实测看到小节标题显示成「【定义】设 A&#x02208;Cn...」就是这个原因。
+   正解：① 先按 <math> 块整体处理（保留或丢弃，由调用方决定）；
+         ② 再用 <template> 解码 HTML 实体 —— template 内容是惰性的，
+            不会加载图片或执行脚本，比用 div 安全。 */
+const RE_MATHBLOCK_G = /<math[\s\S]*?<\/math>/g;
+const _txtTpl = document.createElement('template');
+function toPlain(s, mathToken) {
+  const t = String(s == null ? '' : s)
+    .replace(/\$\$[\s\S]*?\$\$|\$[^$]*\$/g, mathToken || '')
+    .replace(RE_MATHBLOCK_G, mathToken || '');
+  _txtTpl.innerHTML = t;
+  return (_txtTpl.content.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+/* 取一句话的前 n 字做标题（公式换成 ⟨式⟩，太长则截断） */
 function brief(s, n) {
-  const plain = String(s || '').replace(RE_MATHSPAN, '⟨式⟩').replace(/<[^>]+>/g, '');
+  const plain = toPlain(s, '⟨式⟩');
   return plain.length > n ? plain.slice(0, n - 1) + '…' : plain;
 }
 /* 卡片标题：在第一个标点处断开，得到「为什么要给矩阵分类」这种短语，
    而不是把导语原样截断（那样标题和下方导语会重复一遍）。 */
 function briefTitle(s, n) {
   n = n || 18;
-  const plain = String(s || '').replace(RE_MATHSPAN, '').replace(/<[^>]+>/g, '').trim();
+  // 公式换成 ⟨式⟩ 而不是直接删掉 —— 删掉会让标题出现「设 是 Hermite 矩阵」这种断句
+  const plain = toPlain(s, '⟨式⟩');
   const cut = (plain.split(/[，。：；？！,]/)[0] || '').trim();
   const t = cut.length >= 4 ? cut : plain;
   return t.length > n ? t.slice(0, n) + '…' : t;
@@ -304,7 +339,7 @@ function renderPath() {
       const el = h(`<div class="pitem" data-kp="${k.id}">
         <div class="pdot ${dot}">${r.lv === 'done' ? '✓' : (k.level || '')}</div>
         <div class="pi-body">
-          <div class="pi-name">${esc(k.title)}</div>
+          <div class="pi-name">${rich(k.title)}</div>
           <div class="pi-meta"><span>${(LV[k.importance] || {}).s || ''}</span><span>例题 ${(k.examples || []).length}</span><span>${r.m}%</span></div>
           <div class="pbar"><i style="width:${r.m}%"></i></div>
         </div></div>`);
@@ -520,7 +555,7 @@ function viewKP(id, forceTop) {  const k = BY_ID[id];
       <span class="chip plain">${esc(k.module || '')}</span>
       <span class="chip plain">掌握度 ${r.m}%</span>
     </div>
-    <h1 class="kp-title">${esc(k.title)}</h1>
+    <h1 class="kp-title">${rich(k.title)}</h1>
     <p class="kp-sum">${k.summary || ''}</p>
   </div>`));
 
@@ -653,7 +688,7 @@ function viewKP(id, forceTop) {  const k = BY_ID[id];
     k.examples.forEach((ex, i) => {
       const open = (st.examples || []).includes(i);
       const el = h(`<div class="ex ${open ? 'open' : ''}">
-        <div class="ex-h"><span class="ex-n">${i + 1}</span><span class="ex-t">${esc(ex.title || '例题')}</span><span class="ex-arrow">▶</span></div>
+        <div class="ex-h"><span class="ex-n">${i + 1}</span><span class="ex-t">${rich(ex.title || '例题')}</span><span class="ex-arrow">▶</span></div>
         <div class="ex-b">
           <div class="ex-sec"><span class="lbl">题目</span><div>${ex.problem || ''}</div></div>
           ${(ex.steps || []).length ? `<div class="ex-sec"><span class="lbl">解题步骤</span><ol>${ex.steps.map(s => `<li>${s}</li>`).join('')}</ol></div>` : ''}
@@ -679,7 +714,7 @@ function viewKP(id, forceTop) {  const k = BY_ID[id];
   /* FAQ */
   if ((k.faq || []).length) {
     v.appendChild(h(`<div class="card"><div class="card-h"><i class="bar"></i>常见困惑</div>
-      ${k.faq.map(f => `<div class="ex"><div class="ex-h"><span class="ex-n" style="background:var(--key)">?</span><span class="ex-t">${esc(f.q)}</span><span class="ex-arrow">▶</span></div>
+      ${k.faq.map(f => `<div class="ex"><div class="ex-h"><span class="ex-n" style="background:var(--key)">?</span><span class="ex-t">${rich(f.q)}</span><span class="ex-arrow">▶</span></div>
       <div class="ex-b">${f.a}</div></div>`).join('')}</div>`));
     v.querySelectorAll('.card:last-child .ex-h').forEach(e => e.onclick = () => { const p = e.parentElement; p.classList.toggle('open'); });
   }
@@ -688,8 +723,8 @@ function viewKP(id, forceTop) {  const k = BY_ID[id];
   const idx = KP.findIndex(x => x.id === id);
   const prev = KP[idx - 1], next = KP[idx + 1];
   v.appendChild(h(`<div class="card tight" style="display:flex;justify-content:space-between;gap:12px;align-items:center">
-    <div>${prev ? `<button class="btn sec" data-go2="${prev.id}">← 上一层：${esc(prev.title)}</button>` : '<span style="color:var(--ink-3);font-size:13px">已是第一个知识点</span>'}</div>
-    <div>${next ? `<button class="btn" data-go2="${next.id}">下一层：${esc(next.title)} →</button>` : '<span style="color:var(--ink-3);font-size:13px">已是最后一个知识点 🎉</span>'}</div>
+    <div>${prev ? `<button class="btn sec" data-go2="${prev.id}">← 上一层：${rich(prev.title)}</button>` : '<span style="color:var(--ink-3);font-size:13px">已是第一个知识点</span>'}</div>
+    <div>${next ? `<button class="btn" data-go2="${next.id}">下一层：${rich(next.title)} →</button>` : '<span style="color:var(--ink-3);font-size:13px">已是最后一个知识点 🎉</span>'}</div>
   </div>`));
 
   bindGo(v);
@@ -704,9 +739,24 @@ function bindGo(root) {
 /* ================= 习题块 ================= */
 function quizBlock(k, st, inline) {
   const box = h(`<div class="card"><div class="card-h"><i class="bar"></i>自测练习
-    <span class="hint">共 ${k.quiz.length} 题 · 作答即计入掌握度</span></div><div class="qbox"></div></div>`);
+    <span class="hint">共 ${k.quiz.length} 题 · 作答即计入掌握度</span>
+    <div class="toolbar"><button class="tbtn" id="qz-reset">重置本章习题</button></div></div>
+    <div class="qbox"></div></div>`);
   const qb = box.querySelector('.qbox');
   k.quiz.forEach((q, qi) => qb.appendChild(quizItem(k, q, qi, st)));
+  // 每章单独重置：只清这一章的答题记录与讲解展开状态，不动其它章节、也不动时长/例题/自检。
+  // 用户 2026-10-09 反馈：习题提交后就改不了了，需要能重做。
+  box.querySelector('#qz-reset').onclick = () => {
+    const s2 = kpS(k.id);
+    const n = Object.keys(s2.quiz || {}).length;
+    if (!n) { toast('本章还没有作答记录'); return; }
+    if (!confirm(`重置「${k.title}」这一章的 ${n} 道习题作答记录？（只清本章，其它章节和例题进度不受影响）`)) return;
+    s2.quiz = {};
+    save(); hud(); renderPath();
+    const nv = $('#view');
+    if (nv) { nv.innerHTML = ''; viewKP(k.id, false); }
+    toast('已重置本章习题');
+  };
   return box;
 }
 function quizItem(k, q, qi, st) {
@@ -817,7 +867,7 @@ function viewPractice() {
     const el = h(`<div class="ex">
       <div class="ex-h">
         <span class="ex-n" style="background:${row.r.lv === 'done' ? 'var(--primary)' : (row.r.lv === 'zero' ? '#C9C2B8' : 'var(--key)')}">${row.k.level}</span>
-        <span class="ex-t">${esc(row.k.title)}</span>
+        <span class="ex-t">${rich(row.k.title)}</span>
         <span class="chip ${row.k.importance}" style="font-size:11px">${(LV[row.k.importance] || {}).s}</span>
         <span style="font-size:12px;color:var(--ink-3);min-width:120px;text-align:right">已做 ${row.a}/${row.n} · 对 ${row.c} · 掌握 ${row.r.m}%</span>
         <span class="ex-arrow">▶</span>
