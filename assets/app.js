@@ -1244,10 +1244,13 @@ function viewHome() {
 /* ================= 路由 ================= */
 function route() {
   const hh = location.hash || '';
-  if (hh.startsWith('#/kp/')) { render(1); return viewKP(hh.slice(5)); }
-  if (hh === '#/practice') { render(2); return viewPractice(); }
-  if (hh === '#/qa') { render(3); return viewQA(); }
-  if (hh === '#/mastery') { render(4); return viewMastery(); }
+  // 标签下标 = #tabs 里 .tab 的顺序（0=递进学习 1=习题系统 2=互动问答 3=掌握度）。
+  // 修正记录：这里原本写成 1/2/3/4（整体差 1），于是进知识点页会高亮成「习题系统」，
+  // 进掌握度页则因为 render(4) 越界而**没有任何标签高亮**。
+  if (hh.startsWith('#/kp/')) { render(0); return viewKP(hh.slice(5)); }
+  if (hh === '#/practice') { render(1); return viewPractice(); }
+  if (hh === '#/qa') { render(2); return viewQA(); }
+  if (hh === '#/mastery') { render(3); return viewMastery(); }
   render(0); viewHome();
 }
 function render(tabIdx) {
